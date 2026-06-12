@@ -1,0 +1,44 @@
+{
+  "realm": "cashflow",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "cashflow-client",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "cashflow-secret",
+      "serviceAccountsEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "standardFlowEnabled": false,
+      "protocolMappers": [
+        {
+          "name": "audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "cashflow-api",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "roles": {
+    "realm": [
+      { "name": "cashflow-write" },
+      { "name": "cashflow-read" }
+    ]
+  },
+  "clientScopes": [
+    {
+      "name": "cashflow:write",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true" }
+    },
+    {
+      "name": "cashflow:read",
+      "protocol": "openid-connect",
+      "attributes": { "include.in.token.scope": "true" }
+    }
+  ]
+}
