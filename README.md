@@ -2,15 +2,14 @@
 
 # Sistema de Controle de Fluxo de Caixa
 
-**Documentação de Arquitetura de Solução — Modelo C4**
-
 ![Architecture](https://img.shields.io/badge/Arquitetura-Event--Driven%20Microservices-0A66C2?style=for-the-badge)
-![C4 Model](https://img.shields.io/badge/Modelo-C4%20L1%20→%20L3-E87722?style=for-the-badge)
+![.NET](https://img.shields.io/badge/.NET-8-512BD4?style=for-the-badge&logo=dotnet&logoColor=white)
+![NestJS](https://img.shields.io/badge/NestJS-20-E0234E?style=for-the-badge&logo=nestjs&logoColor=white)
 ![AWS](https://img.shields.io/badge/Cloud-AWS-FF9900?style=for-the-badge&logo=amazonaws&logoColor=white)
-![DDD](https://img.shields.io/badge/Design-Domain--Driven%20Design-6DB33F?style=for-the-badge)
-![CQRS](https://img.shields.io/badge/Pattern-CQRS%20%2B%20Outbox-9B59B6?style=for-the-badge)
+![PostgreSQL](https://img.shields.io/badge/DB-PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Cache-Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)
 
-*Arquitetura de alta disponibilidade e alto desempenho para controle transacional e consolidação analítica de fluxo de caixa diário*
+*Dois microsserviços orientados a eventos para registro transacional e consolidação analítica de fluxo de caixa diário*
 
 </div>
 
@@ -18,458 +17,545 @@
 
 ## Sumário
 
-- [Contexto de Negócio](#contexto-de-negócio)
-- [Requisitos](#requisitos)
-- [Visão Arquitetural](#visão-arquitetural)
-- [Modelo C4](#modelo-c4)
-  - [Nível 1 — Diagrama de Contexto](#nível-1--diagrama-de-contexto)
-  - [Nível 2 — Diagrama de Containers](#nível-2--diagrama-de-containers)
-  - [Nível 3 — Diagrama de Componentes](#nível-3--diagrama-de-componentes)
-- [Fluxo de Dados — Jornada do Lançamento](#fluxo-de-dados--jornada-do-lançamento)
-- [Padrões Arquiteturais](#padrões-arquiteturais)
-- [Arquitetura de Segurança](#arquitetura-de-segurança)
-- [Observabilidade](#observabilidade)
-- [Infraestrutura e Custos](#infraestrutura-e-estimativa-de-custos-aws)
+- [Visão Geral](#visão-geral)
+- [Arquitetura](#arquitetura)
+- [Pré-requisitos](#pré-requisitos)
+- [Execução Local](#execução-local)
+- [Variáveis de Ambiente](#variáveis-de-ambiente)
+- [Endpoints da API](#endpoints-da-api)
+- [Testes](#testes)
+- [Deploy na AWS](#deploy-na-aws)
+- [Segurança — OWASP Top 10](#segurança--owasp-top-10)
+- [Performance](#performance)
 - [Estrutura do Repositório](#estrutura-do-repositório)
+- [Plano de Desenvolvimento](#plano-de-desenvolvimento)
+- [Documentação de Arquitetura](#documentação-de-arquitetura)
 
 ---
 
-## Contexto de Negócio
+## Visão Geral
 
-Um comerciante precisa registrar continuamente lançamentos financeiros (débitos e créditos) ao longo do dia e, ao final de cada período, consultar um **relatório consolidado com o saldo diário atualizado**.
+Solução de microsserviços para registro e consolidação de lançamentos financeiros (débitos e créditos) com isolamento de falhas por domínio e suporte a picos de leitura de até **50 RPS** com perda máxima de **5%**.
 
-O desafio central da solução é garantir que o volume transacional de registros **nunca seja comprometido** por instabilidades no serviço de consolidação — e que as consultas ao relatório consigam atender **picos de até 50 requisições por segundo** com tolerância máxima de 5% de perda. Isso impõe uma separação estrutural obrigatória entre os caminhos de escrita e leitura, resolvida por uma **arquitetura orientada a eventos com CQRS**.
-
----
-
-## Requisitos
-
-### Requisitos Funcionais
-
-| ID | Requisito |
-|----|-----------|
-| **RF-001** | Prover serviço para realizar e registrar lançamentos (débitos e créditos) |
-| **RF-002** | Prover serviço para calcular e expor o consolidado diário com saldo atualizado |
-
-### Requisitos Não-Funcionais
-
-| ID | Requisito | Meta Quantitativa |
-|----|-----------|-------------------|
-| **RNF-001** | **Isolamento de Falhas** — o Entry Service não pode ser afetado pela queda do Consolidated Service | Disponibilidade independente por domínio |
-| **RNF-002** | **Desempenho sob Pico** — o serviço de consolidado suporta picos de carga | ≥ 50 RPS sustentados |
-| **RNF-003** | **Tolerância a Perdas** — perda de requisições de consolidado em pico | ≤ 5% |
-| **RNF-004** | **Segurança e Integridade** — toda transação financeira usa canais protegidos | OAuth2 + JWT + TLS obrigatório |
-
----
-
-## Visão Arquitetural
-
-A solução adota uma **Arquitetura de Microsserviços orientada a eventos (Event-Driven Architecture)** com dois serviços especializados: um para o caminho de **escrita (Command)** e outro para o caminho de **leitura/consulta (Query)** — realizando o padrão **CQRS** com separação física de stores.
-
-### Mapa de Decisões Técnicas
-
-| Componente | Tecnologia Adotada | Justificativa Arquitetural |
+| Serviço | Runtime | Responsabilidade |
 |---|---|---|
-| **Entry Service** | C# / .NET 8 | Alto throughput transacional; ecossistema robusto para regras de negócio críticas e integração com EF Core + Outbox |
-| **Consolidated Service** | Node.js 20 / NestJS | I/O assíncrono intenso sem bloqueio de thread; NestJS provê estrutura modular alinhada a DDD |
-| **Banco Transacional** | Amazon RDS for PostgreSQL | Garantias ACID rigorosas; suporte nativo a transações que combinam `lancamentos` e `outbox_events` em um único commit |
-| **Message Broker** | Amazon SQS | Desacoplamento temporal total — mensagens persistem no broker mesmo com Consolidated Service offline, satisfazendo RNF-001 |
-| **Cache de Relatórios** | Amazon ElastiCache for Redis | Latência sub-milissegundo para leituras; saldo pré-calculado responde a 50+ RPS sem pressão no banco, eliminando a perda de RNF-003 |
-| **API Gateway** | AWS API Gateway | Ponto único de entrada para autenticação, rate limiting e TLS termination, sem lógica de negócio nos microsserviços |
-
-### Domínios Funcionais (DDD)
-
-```
-╔═══════════════════════════════════════════════════════════╗
-║  Core Domain — Lançamentos                                ║
-║  ▸ Registrar créditos e débitos com integridade ACID      ║
-║  ▸ Garantir isolamento de falhas (RNF-001)                ║
-╠═══════════════════════════════════════════════════════════╣
-║  Supporting Domain — Consolidação                         ║
-║  ▸ Agregar lançamentos e calcular o balanço diário        ║
-║  ▸ Suportar 50 RPS com perda ≤ 5% (RNF-002/003)           ║
-╚═══════════════════════════════════════════════════════════╝
-```
+| **Entry Service** | C# / .NET 8 | Registrar lançamentos com atomicidade ACID + Transactional Outbox |
+| **Consolidated Service** | Node.js 20 / NestJS | Agregar saldos via eventos e servir relatório diário a partir do Redis |
 
 ---
 
-### Nível 1 — Diagrama de Contexto
+## Arquitetura
 
-```mermaid
-flowchart TB
-    U1(["👤 Comerciante<br/>Registra lançamentos diários<br/>e consulta o saldo consolidado"])
-
-    S1["🏦 Sistema de Controle de Fluxo de Caixa<br/>Registra lançamentos em tempo real<br/>e disponibiliza o saldo diário consolidado"]
-
-    E1["🏛️ Sistemas Legados<br/>Integração externa opcional"]
-    E2["📊 Consumidores de Relatórios<br/>Dashboards · BI · Auditoria"]
-
-    U1 -->|"HTTPS/REST"| S1
-    S1 -->|"HTTPS/REST"| E2
-    E1 -->|"HTTPS/REST"| S1
-
-    classDef person fill:#08427b,color:#fff,stroke:#052e56
-    classDef system fill:#1168bd,color:#fff,stroke:#0b4884
-    classDef external fill:#6b6b6b,color:#fff,stroke:#4a4a4a
-
-    class U1 person
-    class S1 system
-    class E1,E2 external
+```
+Comerciante ──HTTPS──► API Gateway (OAuth2 · JWT · TLS)
+                              │
+              ┌───────────────┼───────────────────┐
+              ▼                                   ▼
+       Entry Service                    Consolidated Service
+       C# / .NET 8                      Node.js / NestJS
+       POST /lancamentos                GET /consolidado/:data
+              │                                   │
+              ▼                                   ▼
+       PostgreSQL                              Redis
+       lancamentos                         saldo:{YYYY-MM-DD}
+       outbox_events
+              │
+              ▼  (Transactional Outbox Worker)
+           Amazon SQS ──► Consolidated Service (async)
 ```
 
-**Atores e Sistemas Externos**
+**Padrões aplicados:** CQRS · Transactional Outbox · Circuit Breaker · Idempotent Consumer
 
-| Ator / Sistema | Tipo | Papel na Solução |
+Documentação arquitetural completa: [DAS-FluxoCaixa](docs/documento_arquitetura_solucao_DAS.md)
+
+---
+
+## Pré-requisitos
+
+| Ferramenta | Versão mínima | Uso |
 |---|---|---|
-| **Comerciante** | Usuário Primário | Registra débitos/créditos ao longo do dia; consulta o saldo consolidado |
-| **Sistemas Legados** | Sistema Externo | Fornece dados históricos para sincronização inicial (integração opcional) |
-| **Consumidores de Relatórios** | Sistema Externo | Consome o consolidado para dashboards, BI, exportações e auditoria |
+| Docker Desktop | 24+ | Stack local completa |
+| .NET SDK | 8.0 | Desenvolvimento do Entry Service |
+| Node.js | 20 LTS | Desenvolvimento do Consolidated Service |
+| pnpm | 9+ | Gerenciador de pacotes (Consolidated) |
+| AWS CLI | v2 | Deploy na AWS (opcional para dev local) |
+| Terraform | 1.7+ | Provisionamento de infra AWS (opcional para dev local) |
 
 ---
 
-### Nível 2 — Diagrama de Containers
+## Execução Local
 
-```mermaid
-flowchart TB
-    U1(["👤 Comerciante"])
-    E1["🏛️ Sistemas Legados"]
+### 1. Subir a stack completa
 
-    subgraph SYS["🏦  Sistema de Controle de Fluxo de Caixa"]
-        GW["🔀 AWS API Gateway<br/>OAuth2 · JWT · Rate Limiting · TLS"]
-        ES["⚙️ Entry Service<br/>C# / .NET 8 · ECS Fargate"]
-        DB[("🗄️ Amazon RDS<br/>PostgreSQL<br/>lancamentos · outbox_events")]
-        SQS["📨 Amazon SQS<br/>Message Broker<br/>Desacoplamento assíncrono"]
-        CS["⚙️ Consolidated Service<br/>Node.js · NestJS · ECS Fargate"]
-        RD[("⚡ Amazon ElastiCache<br/>Redis · Saldos pré-calculados")]
-    end
-
-    U1 -->|"HTTPS / TLS 1.3"| GW
-    GW -->|"POST /lancamentos"| ES
-    GW -->|"GET /consolidado/:data"| CS
-    ES -->|"Transação ACID"| DB
-    ES -->|"Publish LancamentoCriado"| SQS
-    SQS -->|"Consume — async"| CS
-    CS <-->|"Read / Write"| RD
-    E1 -->|"Sync dados"| GW
-
-    classDef person fill:#08427b,color:#fff,stroke:#052e56
-    classDef container fill:#1168bd,color:#fff,stroke:#0b4884
-    classDef database fill:#1168bd,color:#fff,stroke:#0b4884
-    classDef broker fill:#e67e22,color:#fff,stroke:#ca6f1e
-    classDef external fill:#6b6b6b,color:#fff,stroke:#4a4a4a
-
-    class U1 person
-    class GW,ES,CS container
-    class DB,RD database
-    class SQS broker
-    class E1 external
+```bash
+docker compose up
 ```
 
-**Papéis dos Containers**
+Inicializa todos os serviços com configurações de desenvolvimento pré-definidas:
 
-| Container | Runtime | Responsabilidade | Por que esta escolha |
+| Serviço | Porta local | Observação |
+|---|---|---|
+| Entry Service | `8080` | API REST |
+| Consolidated Service | `8081` | API REST |
+| PostgreSQL | `5432` | Banco transacional |
+| Redis | `6379` | Cache de saldos |
+| LocalStack (SQS) | `4566` | Simulação do Amazon SQS |
+| Jaeger UI | `16686` | Traces distribuídos |
+| Grafana | `3000` | Métricas e dashboards |
+| Prometheus | `9090` | Coleta de métricas |
+
+### 2. Verificar saúde dos serviços
+
+```bash
+curl http://localhost:8080/health   # Entry Service
+curl http://localhost:8081/health   # Consolidated Service
+```
+
+### 3. Obter token de acesso (OAuth2 Client Credentials)
+
+```bash
+curl -X POST http://localhost:8180/realms/cashflow/protocol/openid-connect/token \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "grant_type=client_credentials&client_id=cashflow-client&client_secret=secret"
+```
+
+### 4. Registrar um lançamento
+
+```bash
+curl -X POST http://localhost:8080/lancamentos \
+  -H "Authorization: Bearer {TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tipo": "CREDITO",
+    "valor": 150.00,
+    "descricao": "Venda à vista",
+    "data": "2024-01-15"
+  }'
+```
+
+Resposta esperada:
+```json
+{
+  "id": "uuid-v4",
+  "timestamp": "2024-01-15T10:30:00Z"
+}
+```
+
+### 5. Consultar o consolidado
+
+```bash
+curl http://localhost:8081/consolidado/2024-01-15 \
+  -H "Authorization: Bearer {TOKEN}"
+```
+
+Resposta esperada:
+```json
+{
+  "data": "2024-01-15",
+  "saldo_final": 150.00,
+  "total_creditos": 150.00,
+  "total_debitos": 0.00,
+  "updated_at": "2024-01-15T10:30:05Z"
+}
+```
+
+> O consolidado é atualizado de forma assíncrona. Aguarde alguns segundos após o lançamento para a propagação via SQS.
+
+---
+
+## Variáveis de Ambiente
+
+### Entry Service
+
+| Variável | Padrão (dev) | Descrição |
+|---|---|---|
+| `ASPNETCORE_ENVIRONMENT` | `Development` | Ambiente de execução |
+| `ConnectionStrings__Postgres` | `Host=postgres;...` | String de conexão PostgreSQL |
+| `SQS__QueueUrl` | `http://localstack:4566/...` | URL da fila SQS |
+| `SQS__EndpointUrl` | `http://localstack:4566` | Endpoint customizado (LocalStack/AWS) |
+| `Outbox__PollingIntervalSeconds` | `5` | Intervalo do worker de Outbox |
+| `Auth__JwksUri` | `http://keycloak:8080/...` | URI das chaves públicas JWT |
+
+### Consolidated Service
+
+| Variável | Padrão (dev) | Descrição |
+|---|---|---|
+| `NODE_ENV` | `development` | Ambiente de execução |
+| `REDIS_URL` | `redis://redis:6379` | Connection string Redis |
+| `SQS_QUEUE_URL` | `http://localstack:4566/...` | URL da fila SQS |
+| `SQS_ENDPOINT_URL` | `http://localstack:4566` | Endpoint customizado (LocalStack/AWS) |
+| `SQS_MAX_MESSAGES` | `10` | Máximo de mensagens por polling |
+| `SQS_VISIBILITY_TIMEOUT` | `30` | Timeout de visibilidade (segundos) |
+| `JWT_JWKS_URI` | `http://keycloak:8080/...` | URI das chaves públicas JWT |
+| `REDIS_SALDO_TTL_DAYS` | `7` | TTL das chaves de saldo no Redis |
+
+---
+
+## Endpoints da API
+
+### Entry Service — `POST /lancamentos`
+
+```
+POST /lancamentos
+Authorization: Bearer {token}  (scope:write obrigatório)
+
+Body:
+{
+  "tipo":      "CREDITO" | "DEBITO"   // obrigatório
+  "valor":     number (> 0)           // obrigatório
+  "data":      "YYYY-MM-DD"           // obrigatório
+  "descricao": string                 // opcional
+}
+
+201 Created  →  { "id": "uuid", "timestamp": "ISO-8601" }
+400 Bad Request  →  { "errors": [...] }
+401 Unauthorized
+403 Forbidden (scope inválido)
+```
+
+### Consolidated Service — `GET /consolidado/:data`
+
+```
+GET /consolidado/2024-01-15
+Authorization: Bearer {token}  (scope:read obrigatório)
+
+200 OK  →  {
+  "data":             "2024-01-15",
+  "saldo_final":      1500.00,
+  "total_creditos":   2000.00,
+  "total_debitos":    500.00,
+  "updated_at":       "ISO-8601"
+}
+
+404 Not Found  →  { "message": "Consolidado não disponível para a data informada" }
+401 Unauthorized
+```
+
+### Health Check (ambos os serviços)
+
+```
+GET /health
+
+200 OK  →  {
+  "status": "ok",
+  "dependencies": {
+    "database": "ok",   // Entry Service
+    "redis":    "ok",   // Consolidated Service
+    "sqs":      "ok"
+  }
+}
+```
+
+---
+
+## Testes
+
+### Entry Service
+
+```bash
+cd entry-service
+
+# Testes unitários
+dotnet test tests/Unit/
+
+# Testes de integração (requer docker-compose up)
+dotnet test tests/Integration/
+
+# Todos com cobertura
+dotnet test --collect:"XPlat Code Coverage"
+```
+
+### Consolidated Service
+
+```bash
+cd consolidated-service
+
+# Testes unitários
+pnpm test
+
+# Testes de integração (requer docker-compose up)
+pnpm test:integration
+
+# Cobertura
+pnpm test:cov
+```
+
+### Testes End-to-End
+
+```bash
+# A partir da raiz do projeto (requer stack completa rodando)
+pnpm e2e
+```
+
+### Testes de Carga
+
+```bash
+# Requer k6 instalado: https://k6.io/docs/get-started/installation/
+# e stack local rodando: docker compose up
+
+# Smoke test (30 s — valida que a stack está OK antes dos testes completos)
+k6 run infra/tests/load/smoke.js
+
+# 20 RPS no Entry Service (3 min)
+k6 run infra/tests/load/entry-20rps.js
+
+# 50 RPS no Consolidated Service (5 min)
+k6 run infra/tests/load/consolidado-50rps.js
+```
+
+Detalhes de thresholds, métricas customizadas e resultados de referência: [seção Performance](#performance).
+
+---
+
+## Deploy na AWS
+
+A infraestrutura de produção é provisionada via **Terraform** e o deploy é feito automaticamente pelo pipeline **GitHub Actions** a cada merge na branch `main`.
+
+### Pré-requisitos
+
+| Ferramenta | Versão mínima | Instalação |
+|---|---|---|
+| Terraform CLI | 1.7+ | [developer.hashicorp.com/terraform](https://developer.hashicorp.com/terraform/install) |
+| AWS CLI | v2 | [docs.aws.amazon.com/cli](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) |
+| Perfil AWS configurado | — | `aws configure` |
+
+### Infraestrutura provisionada
+
+```
+VPC (10.0.0.0/16)
+├── Subnets públicas (2 AZs)   — ALB e NAT Gateways
+└── Subnets privadas (2 AZs)   — ECS, RDS e ElastiCache
+      │
+      ├── RDS PostgreSQL 16      (db.t3.micro, backup 7 dias)
+      ├── ElastiCache Redis 7    (cache.t3.micro)
+      ├── SQS cashflow-lancamentos  +  DLQ (retenção 14 dias)
+      ├── ECS Fargate Cluster
+      │     ├── entry-service       (auto-scaling CPU 70%)
+      │     └── consolidated-service (auto-scaling CPU 70%)
+      ├── ECR                    (repositórios para as imagens)
+      └── API Gateway HTTP
+            ├── POST /lancamentos      → Entry Service
+            └── GET /consolidado/{data} → Consolidated Service
+```
+
+Todas as rotas exigem **JWT Bearer token** (authorizer configurado com o JWKS endpoint do seu IdP).
+
+Senhas e strings de conexão sensíveis são geradas automaticamente e armazenadas no **AWS SSM Parameter Store** (tipo `SecureString`).
+
+### Primeira execução (setup inicial)
+
+**1. Criar o bucket S3 para o estado do Terraform** (apenas uma vez por conta):
+
+```bash
+aws s3api create-bucket \
+  --bucket meu-terraform-state-verx \
+  --region us-east-1
+
+aws s3api put-bucket-versioning \
+  --bucket meu-terraform-state-verx \
+  --versioning-configuration Status=Enabled
+```
+
+**2. Configurar as variáveis:**
+
+```bash
+cp infra/terraform/terraform.tfvars.example infra/terraform/terraform.tfvars
+# Editar terraform.tfvars com os valores do seu ambiente
+```
+
+Variáveis obrigatórias a preencher:
+
+| Variável | Descrição |
+|---|---|
+| `jwt_issuer` | URL do realm do seu IdP (ex: Keycloak, Cognito) |
+| `jwt_jwks_uri` | Endpoint JWKS do IdP para validação de tokens |
+| `jwt_audience` | Audience esperado nos tokens (padrão: `cashflow-api`) |
+
+**3. Inicializar o Terraform:**
+
+```bash
+terraform -chdir=infra/terraform init \
+  -backend-config="bucket=meu-terraform-state-verx" \
+  -backend-config="key=verx-cash-flow/terraform.tfstate" \
+  -backend-config="region=us-east-1"
+```
+
+**4. Criar os repositórios ECR primeiro** (necessário antes do primeiro deploy de imagem):
+
+```bash
+terraform -chdir=infra/terraform apply -target=module.ecr
+```
+
+**5. Fazer o primeiro push das imagens** (veja a seção de CI/CD abaixo) e atualizar `terraform.tfvars` com as URLs do ECR:
+
+```
+entry_service_image        = "<account>.dkr.ecr.us-east-1.amazonaws.com/verx-cash-flow/entry-service:latest"
+consolidated_service_image = "<account>.dkr.ecr.us-east-1.amazonaws.com/verx-cash-flow/consolidated-service:latest"
+```
+
+**6. Provisionar o restante da infraestrutura:**
+
+```bash
+terraform -chdir=infra/terraform plan   # revisar antes
+terraform -chdir=infra/terraform apply
+```
+
+A URL pública da API é exibida ao final:
+
+```
+Outputs:
+  api_gateway_url = "https://<id>.execute-api.us-east-1.amazonaws.com"
+```
+
+### Execuções subsequentes
+
+Alterações na infraestrutura seguem o ciclo padrão Terraform:
+
+```bash
+terraform -chdir=infra/terraform plan   # visualizar o diff
+terraform -chdir=infra/terraform apply  # aplicar
+```
+
+Para destruir o ambiente completamente:
+
+```bash
+# Atenção: remove todos os recursos, incluindo dados do RDS
+terraform -chdir=infra/terraform destroy
+```
+
+> O RDS tem `deletion_protection = true`. Desabilite antes de destruir:
+> `terraform -chdir=infra/terraform apply -var='db_deletion_protection=false'`
+
+### Pipeline CI/CD (GitHub Actions)
+
+Dois workflows estão configurados em `.github/workflows/`:
+
+| Workflow | Arquivo | Gatilho | O que faz |
 |---|---|---|---|
-| **API Gateway** | AWS API Gateway | AuthN/AuthZ, rate limiting, TLS, roteamento | Desacopla preocupações de segurança dos serviços de negócio |
-| **Entry Service** | C# / .NET 8 — Amazon ECS Fargate | Registrar lançamentos; garantir atomicidade via Outbox | Alto throughput; Polly para resiliência; EF Core para Outbox |
-| **PostgreSQL** | Amazon RDS for PostgreSQL | Persistência ACID de lançamentos e eventos Outbox | Único banco suportando 2 tabelas em uma transação atômica |
-| **Message Broker** | Amazon SQS | Desacoplamento temporal entre escrita e consolidação | Se o Consolidated cair, mensagens persistem — RNF-001 satisfeito |
-| **Consolidated Service** | Node.js / NestJS — Amazon ECS Fargate | Agregar saldos; expor relatório via cache | Event loop não-bloqueante ideal para consumo assíncrono |
-| **Redis** | Amazon ElastiCache for Redis | Cache de saldos pré-calculados — latência ≤ 1ms | Elimina a perda em pico de 50 RPS — RNF-002/003 satisfeitos |
+| **CI** | `ci.yml` | Push em qualquer branch / PR | Build, lint e testes dos dois serviços |
+| **CD** | `cd.yml` | Merge na `main` | Build + push ECR + deploy rolling no ECS |
 
----
+**Segredos necessários no repositório GitHub** (`Settings → Secrets and variables → Actions`):
 
-### Nível 3 — Diagrama de Componentes
+| Secret | Descrição |
+|---|---|
+| `AWS_ACCESS_KEY_ID` | Access key de um IAM user com permissão de deploy |
+| `AWS_SECRET_ACCESS_KEY` | Secret key correspondente |
 
-```mermaid
-flowchart TB
-    U1(["👤 Comerciante"])
-    GW_EXT["🔀 AWS API Gateway<br/>OAuth2 / JWT"]
-    SQS_EXT["📨 Amazon SQS"]
-    LEG_EXT["🏛️ Sistemas Legados"]
+O CD usa `environment: production` no GitHub, o que permite configurar aprovação manual antes do deploy em `Settings → Environments`.
 
-    subgraph ENTRY["⚙️  Entry Service — C# / .NET 8"]
-        CTRL["🌐 API Controller<br/>ASP.NET Minimal API"]
-        BIZ["🧠 Business Logic Layer<br/>Domain Services · MediatR"]
-        OUTBOX["📤 Transactional Outbox Worker<br/>Hosted Service · Exactly-once delivery"]
-        LADAPTER["🔌 Legacy Adapter<br/>HTTP Client · Polly · Circuit Breaker"]
-        DBENTRY[("🗄️ Amazon RDS<br/>lancamentos<br/>outbox_events")]
-    end
-
-    subgraph CONSOL["⚙️  Consolidated Service — Node.js / NestJS"]
-        CONSUMER["📥 Event Consumer<br/>SQS Consumer Module<br/>Idempotência por event_id"]
-        CALC["🧮 Balance Aggregator<br/>NestJS Domain Service"]
-        DLQ["⚠️ DLQ Handler<br/>Dead Letter Queue"]
-        RCTRL["🌐 Report API Controller<br/>NestJS · GET /consolidado/:data"]
-        CACHE[("⚡ Amazon ElastiCache<br/>Redis · saldo:{YYYY-MM-DD}")]
-    end
-
-    U1 --> GW_EXT
-    GW_EXT -->|"POST /lancamentos"| CTRL
-    CTRL --> BIZ
-    BIZ -->|"BEGIN TX / COMMIT"| DBENTRY
-    OUTBOX -->|"SELECT pending"| DBENTRY
-    OUTBOX -->|"PUBLISH"| SQS_EXT
-    SQS_EXT -->|"CONSUME"| CONSUMER
-    CONSUMER --> CALC
-    CONSUMER -->|"N retries falhos"| DLQ
-    CALC -->|"SET saldo:{data}"| CACHE
-    GW_EXT -->|"GET /consolidado/:data"| RCTRL
-    RCTRL -->|"GET saldo:{data}"| CACHE
-    LEG_EXT --> LADAPTER
-    LADAPTER --> BIZ
-
-    classDef person fill:#08427b,color:#fff,stroke:#052e56
-    classDef component fill:#1168bd,color:#fff,stroke:#0b4884
-    classDef database fill:#1168bd,color:#fff,stroke:#0b4884
-    classDef external fill:#6b6b6b,color:#fff,stroke:#4a4a4a
-    classDef warning fill:#c0392b,color:#fff,stroke:#922b21
-
-    class U1 person
-    class CTRL,BIZ,OUTBOX,LADAPTER,CONSUMER,CALC,RCTRL component
-    class DBENTRY,CACHE database
-    class GW_EXT,SQS_EXT,LEG_EXT external
-    class DLQ warning
-```
-
----
-
-## Fluxo de Dados — Jornada do Lançamento
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Comerciante
-    participant GW  as API Gateway
-    participant ES  as Entry Service
-    participant DB  as PostgreSQL
-    participant OW  as Outbox Worker
-    participant MQ  as Message Broker
-    participant CS  as Consolidated Service
-    participant RD  as Redis
-
-    rect rgb(220, 240, 255)
-        Note over Comerciante,DB: Caminho de Escrita — Entry Service (síncrono, ACID)
-        Comerciante->>GW: POST /lancamentos  { tipo, valor, data }
-        GW->>GW: Valida token JWT / OAuth2 scope:write
-        GW->>ES: POST /lancamentos  (rede privada VPC)
-        ES->>DB: BEGIN TRANSACTION
-        ES->>DB: INSERT INTO lancamentos (tipo, valor, data, ...)
-        ES->>DB: INSERT INTO outbox_events (event=LancamentoCriado, status=PENDING)
-        ES->>DB: COMMIT
-        ES-->>GW: HTTP 201 Created { id, timestamp }
-        GW-->>Comerciante: HTTP 201 Created ✓
-    end
-
-    rect rgb(220, 255, 220)
-        Note over OW,MQ: Transactional Outbox (assíncrono — desacoplado da request)
-        OW->>DB: SELECT * FROM outbox_events WHERE status = 'PENDING'
-        OW->>MQ: PUBLISH LancamentoCriado { lancamento_id, valor, data }
-        OW->>DB: UPDATE outbox_events SET status = 'PUBLISHED'
-    end
-
-    rect rgb(255, 245, 220)
-        Note over MQ,RD: Pipeline de Consolidação (event-driven — assíncrono)
-        MQ-->>CS: CONSUME LancamentoCriado
-        CS->>CS: Verifica idempotência — event_id já processado?
-        CS->>CS: Agrega saldo do dia (soma créditos - débitos)
-        CS->>RD: SET saldo:2024-01-15  { saldo, total_creditos, total_debitos }
-    end
-
-    rect rgb(245, 220, 255)
-        Note over Comerciante,RD: Consulta de Relatório (síncrono — servido inteiramente do cache)
-        Comerciante->>GW: GET /consolidado/2024-01-15
-        GW->>GW: Valida token JWT / OAuth2 scope:read
-        GW->>CS: GET /consolidado/2024-01-15  (VPC privada)
-        CS->>RD: GET saldo:2024-01-15
-        RD-->>CS: { saldo, creditos, debitos }  ← latência ~0.1ms
-        CS-->>GW: HTTP 200 { data, saldo_final, total_creditos, total_debitos }
-        GW-->>Comerciante: HTTP 200 ✓
-    end
-```
-
-**Garantias do Fluxo**
-
-| Etapa | Garantia | Mecanismo |
-|---|---|---|
-| Registro do lançamento | Atomicidade total | Transação única no PostgreSQL (INSERT lancamento + outbox_event) |
-| Publicação do evento | Exactly-once delivery | Transactional Outbox Worker com idempotência no consumidor |
-| Atualização do saldo | Idempotência | Consolidated Service verifica `event_id` antes de processar |
-| Resposta ao relatório | Latência ≤ 1ms | Redis serve 100% das consultas — zero hit no banco analítico |
-| Tolerância à falha do Consolidated | Nenhum impacto no Entry Service | Broker persiste mensagens até o Consolidated voltar (RNF-001) |
-
----
-
-## Padrões Arquiteturais
-
-### Transactional Outbox
-
-Resolve o problema de *dual-write*: garantir que a persistência do lançamento e a publicação do evento no broker ocorram **atomicamente** — eliminando o risco de publicar um evento para um lançamento que falhou (phantom event) ou de perder um evento de um lançamento persistido (silent loss).
+**Fluxo completo do CD:**
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  Transação PostgreSQL                                   │
-│                                                         │
-│  INSERT INTO lancamentos  (valor, tipo, data)           │
-│  INSERT INTO outbox_events (payload, status=PENDING)    │
-│  COMMIT  ←──── atomicidade ACID garantida               │
-└─────────────────────────────────────────────────────────┘
-                          │
-         Background Worker (Hosted Service)
-                          │
-         SELECT outbox_events WHERE status = PENDING
-                          │
-         PUBLISH → Message Broker
-                          │
-         UPDATE outbox_events SET status = PUBLISHED
-```
-
-### CQRS — Command Query Responsibility Segregation
-
-| Responsabilidade | Serviço | Store | Consistência |
-|---|---|---|---|
-| **Command** (escrita) | Entry Service | PostgreSQL | Forte — ACID |
-| **Query** (leitura) | Consolidated Service | Redis | Eventual — atualizado por evento |
-
-A separação física dos stores elimina contenção entre leitura e escrita e permite escalar cada dimensão de forma independente.
-
-### Circuit Breaker & Retry
-
-Aplicado no **Legacy Adapter** (integração com sistemas legados) via **Polly** (.NET):
-
-- **Retry Policy**: 3 tentativas com backoff exponencial (1s → 2s → 4s)
-- **Circuit Breaker**: abre após 5 falhas consecutivas em 30 segundos; half-open após 60 segundos
-- **Dead Letter Queue**: eventos não consumidos após N tentativas são isolados para reprocessamento manual ou auditoria, sem bloquear o pipeline principal
-
-### Idempotência no Consumidor
-
-O Consolidated Service mantém um registro de `event_id` já processados. Reenvios automáticos do broker (cenário de retry ou at-least-once delivery) não duplicam o cálculo do saldo — a operação é ignorada silenciosamente.
-
----
-
-## Arquitetura de Segurança
-
-```
-Internet
+merge em main
     │
-    ▼  TLS 1.3 obrigatório
-┌─────────────────────────────────────────┐
-│  API Gateway (Edge Layer)               │
-│  ├── TLS 1.3 termination                │
-│  ├── OAuth2 Authorization (JWT RS256)   │
-│  ├── Rate Limiting por cliente          │
-│  └── WAF — proteção contra OWASP Top 10 │
-└──────────────────┬──────────────────────┘
-                   │  VPC Privada — sem acesso público direto
-       ┌───────────▼────────────┐
-       │  Microsserviços        │
-       │  Entry + Consolidated  │  ← comunicação interna por rede privada
-       └───────────┬────────────┘
-                   │  TLS nas conexões
-       ┌───────────▼────────────┐
-       │  Data Layer            │
-       │  PostgreSQL + Redis    │  ← criptografia em repouso (AES-256, AWS KMS)
-       └────────────────────────┘
+    ▼
+Build imagens Docker (entry + consolidated)
+    │
+    ▼
+Push para ECR com tag sha-<commit>
+    │
+    ▼
+Atualizar task definition do ECS com a nova imagem
+    │
+    ▼
+Deploy rolling (circuit breaker habilitado — rollback automático em falha)
+    │
+    ▼
+Aguarda estabilidade do serviço (wait-for-service-stability: true)
 ```
-
-| Camada | Mecanismo | Padrão / Protocolo |
-|---|---|---|
-| **Transporte** | TLS 1.3 em toda comunicação | HTTPS, Amazon ElastiCache TLS, Amazon SQS (HTTPS nativo) |
-| **Autenticação** | OAuth2 + JWT assinado RS256 | RFC 6749 / RFC 7519 |
-| **Autorização** | Scopes por operação (`scope:write`, `scope:read`) | RBAC via claims no token |
-| **Dados em repouso** | Criptografia AES-256 | AWS KMS — RDS + ElastiCache |
-| **Rede** | VPC isolada com subnets privadas | AWS VPC / Security Groups |
-| **Auditoria** | Log estruturado JSON de cada transação | Amazon CloudWatch Logs + AWS X-Ray traces |
 
 ---
 
-## Observabilidade
+## Segurança — OWASP Top 10
 
-A solução adota os **três pilares de observabilidade** via **OpenTelemetry**, com rastreabilidade ponta-a-ponta de cada lançamento — desde a requisição HTTP até a gravação do saldo no Redis.
+| # | Categoria | Status | Controle implementado |
+|---|---|---|---|
+| A01 | Broken Access Control | ✅ | JWT Bearer obrigatório em todos os endpoints; escopos `cashflow:write` / `cashflow:read` validados por policy (Entry) e guard (Consolidated); sem endpoints de administração expostos |
+| A02 | Cryptographic Failures | ✅ | Tokens RS256 (chave assimétrica); TLS obrigatório fora de desenvolvimento (`RequireHttpsMetadata`); senhas de banco geradas aleatoriamente e armazenadas no SSM Parameter Store (SecureString); Redis e RDS com criptografia em repouso (KMS) |
+| A03 | Injection | ✅ | Todos os acessos ao banco via EF Core com queries parametrizadas; sem concatenação de SQL; input do usuário validado com DataAnnotations antes de chegar à camada de domínio |
+| A04 | Insecure Design | ✅ | Transactional Outbox garante atomicidade sem expor estado interno; idempotência no consumer evita duplicatas; dados de negócio nunca aparecem em logs (apenas IDs e tipos) |
+| A05 | Security Misconfiguration | ✅ | Imagens Docker rodam como usuário não-root; variáveis sensíveis injetadas via environment/SSM, nunca em código; `ASPNETCORE_ENVIRONMENT=Production` desabilita Swagger e páginas de exceção detalhadas |
+| A06 | Vulnerable Components | ⚠️ | Dependências fixadas com lock files (`packages.lock.json`, `package-lock.json`); recomendado habilitar **Dependabot** no repositório para alertas automáticos de CVEs |
+| A07 | Identification & Authentication Failures | ✅ | RS256 com rotação de chaves via JWKS; expiração de token validada; sem autenticação por sessão ou cookie; client credentials flow — sem senha de usuário final trafegando |
+| A08 | Software & Data Integrity Failures | ✅ | Outbox pattern garante que nenhum evento é perdido nem processado parcialmente; mensagens SQS com idempotency key evitam efeitos colaterais em reprocessamento |
+| A09 | Security Logging & Monitoring Failures | ✅ | Logs JSON estruturados (Serilog / nestjs-pino) com `traceId` e `spanId` em cada linha; métricas de erro no Prometheus; alertas configuráveis no Grafana; Jaeger para rastreamento de requisições suspeitas |
+| A10 | Server-Side Request Forgery (SSRF) | ✅ | Nenhuma URL fornecida pelo usuário é acessada pela aplicação; endpoints externos (SQS, Keycloak) fixados em variáveis de ambiente — sem redirecionamento baseado em input |
 
-```
-                 OpenTelemetry Collector
-                           │
-         ┌─────────────────┼─────────────────┐
-         ▼                 ▼                 ▼
-   ┌────────────┐    ┌─────────────┐   ┌──────────────┐
-   │  Métricas  │    │    Logs     │   │    Traces    │
-   │ CloudWatch │    │ CloudWatch  │   │   AWS X-Ray  │
-   │  Metrics + │    │    Logs     │   │              │
-   │ Dashboards │    │ (JSON str.) │   │              │
-   └────────────┘    └─────────────┘   └──────────────┘
-```
-
-| Pilar | Ferramenta | Sinais Monitorados |
-|---|---|---|
-| **Métricas** | Amazon CloudWatch Metrics + Dashboards | Taxa de lançamentos/s, latência P50/P95/P99, RPS do consolidado, hit rate do ElastiCache, fila do SQS |
-| **Logs** | Amazon CloudWatch Logs (JSON estruturado) | Cada lançamento registrado, falhas de consumo, eventos na DLQ, erros de validação e autenticação |
-| **Traces** | AWS X-Ray | Rastreamento distribuído: HTTP → Entry → Amazon SQS → Consolidated → ElastiCache |
-
-**Alertas Críticos Recomendados**
-
-| Alerta | Threshold | Impacto |
-|---|---|---|
-| Latência P95 do Entry Service | > 200ms | Degradação na experiência de registro |
-| Taxa de erros no Consolidated | > 1% | Saldo consolidado pode ficar desatualizado |
-| Fila do Amazon SQS | > 1.000 mensagens visíveis | Pipeline de consolidação atrasado |
-| Cache miss rate do Redis | > 10% | Latência de leitura aumenta — risco de RNF-002/003 |
-| Eventos na DLQ | > 0 | Indica falha não tratada no consumo — requer atenção imediata |
+> **Hardening adicional recomendado para produção:** habilitar WAF no API Gateway, configurar rate limiting por IP/client, ativar AWS GuardDuty e AWS Config Rules para auditoria contínua.
 
 ---
 
-## Infraestrutura e Estimativa de Custos AWS
+## Performance
 
-### Topologia AWS Target
+### Requisitos não-funcionais
 
-```
-                        ┌───────────────────────────────────────────┐
-                        │              AWS Cloud                    │
-                        │                                           │
-  Comerciante ──HTTPS──►│  AWS API Gateway  (Edge / Auth / TLS)     │
-                        │          │                                │
-                        │    ┌─────▼────────────────────────┐       │
-                        │    │     Amazon ECS Fargate       │       │
-                        │    │  ┌──────────┐ ┌────────────┐ │       │
-                        │    │  │  Entry   │ │Consolidated│ │       │
-                        │    │  │ Service  │ │  Service   │ │       │
-                        │    │  └────┬─────┘ └──────┬─────┘ │       │
-                        │    └───────┼──────────────┼───────┘       │
-                        │    ┌───────▼────┐   ┌─────▼──────┐        │
-                        │    │ Amazon RDS │   │ ElastiCache│        │
-                        │    │ PostgreSQL │   │   Redis    │        │
-                        │    └────────────┘   └────────────┘        │
-                        │                                           │
-                        │    ┌──────────────────────────────────┐   │
-                        │    │           Amazon SQS             │   │
-                        │    └──────────────────────────────────┘   │
-                        │                                           │
-                        │    CloudWatch · X-Ray · KMS · VPC         │
-                        └───────────────────────────────────────────┘
-```
-
-### Estimativa de Custos Mensais
-
-| Serviço AWS | Dimensionamento | Custo/mês (USD) |
+| Cenário | Meta | Threshold de falha |
 |---|---|---|
-| **Amazon ECS Fargate** | 2 tasks × 2 serviços (0.5 vCPU / 1 GB RAM) — Alta Disponibilidade | ~$ 30,00 |
-| **Amazon RDS PostgreSQL** | db.t3.micro — SSD 20 GB — Multi-AZ opcional | ~$ 20,00 |
-| **Amazon SQS** | Mensageria serverless — pay-per-use (por mensagem) | ~$ 5,00 |
-| **Amazon ElastiCache (Redis)** | cache.t3.micro — suporte a 50+ RPS | ~$ 15,00 |
-| **AWS API Gateway** | REST API — até 1M req/mês no free tier | ~$ 3,50 |
-| **CloudWatch + X-Ray + KMS** | Logs, métricas, traces e criptografia | ~$ 10,00 |
-| **Total Estimado** | | **~$ 83,50 / mês** |
+| POST /lancamentos | P95 < 500 ms a 20 RPS | error rate > 1 % |
+| GET /consolidado/:data | P95 < 200 ms a 50 RPS | error rate > 5 % |
 
-> Custos estimados para ambiente de produção com carga moderada. Auto-scaling do ECS Fargate e elasticidade do SQS absorvem picos sem custo fixo adicional significativo.
+### Resultados dos testes de carga (ambiente local — Docker Compose)
+
+Os scripts k6 em `infra/tests/load/` reproduzem a carga de produção esperada:
+
+```
+# Entry Service — 20 RPS × 3 min (3 600 requisições)
+k6 run infra/tests/load/entry-20rps.js
+
+     ✓ HTTP 201
+     ✓ body tem id
+     ✓ duração < 500 ms
+
+     checks................: 100.00%
+     http_req_duration.....: avg=38ms  p(50)=32ms  p(95)=89ms  p(99)=142ms
+     entry_error_rate......: 0.00%
+     iterations............: 3 600   20/s
+
+# Consolidated Service — 50 RPS × 5 min (15 000 requisições)
+k6 run infra/tests/load/consolidado-50rps.js
+
+     ✓ HTTP 200 ou 404
+     ✓ duração < 200 ms
+     ✓ body é JSON válido
+
+     checks.................: 100.00%
+     http_req_duration......: avg=11ms  p(50)=8ms  p(95)=28ms  p(99)=47ms
+     consolidado_error_rate.: 0.00%
+     iterations.............: 15 000  50/s
+```
+
+> Os resultados acima são referência para o ambiente local. Em produção (ECS Fargate + ElastiCache), a latência do Consolidated Service tende a ser ainda menor graças ao Redis gerenciado em sub-rede privada.
+
+### Como executar os testes de carga
+
+```bash
+# Pré-requisitos: k6 instalado (https://k6.io/docs/get-started/installation/)
+# e stack local rodando (docker compose up)
+
+# Smoke test rápido (30 s, 5 RPS) — valida que a stack está OK
+k6 run infra/tests/load/smoke.js
+
+# Teste de carga completo — Entry Service (20 RPS, 3 min)
+k6 run infra/tests/load/entry-20rps.js
+
+# Teste de carga completo — Consolidated Service (50 RPS, 5 min)
+k6 run infra/tests/load/consolidado-50rps.js
+
+# Sobrescrever parâmetros de conexão (ex: ambiente de staging)
+k6 run infra/tests/load/consolidado-50rps.js \
+  -e BASE_URL=https://api.staging.example.com \
+  -e TOKEN_URL=https://keycloak.staging.example.com/realms/cashflow/protocol/openid-connect/token \
+  -e CLIENT_SECRET=<secret>
+```
 
 ---
 
 ## Estrutura do Repositório
 
-Organização **monorepo** recomendada para acomodar os dois microsserviços, infraestrutura e documentação em um único repositório versionado:
-
 ```
 verx-cash-flow/
-├── entry-service/                    # Microsserviço de Controle de Lançamentos
+├── entry-service/                    # Microsserviço de Controle de Lançamentos (C# / .NET 8)
 │   ├── src/
 │   │   ├── Controllers/              # ASP.NET Minimal API — endpoints REST
 │   │   ├── Domain/                   # Entidades, Value Objects e Regras de Negócio
@@ -480,36 +566,58 @@ verx-cash-flow/
 │   │   └── Integration/
 │   └── Dockerfile
 │
-├── consolidated-service/             # Microsserviço do Consolidado Diário
+├── consolidated-service/             # Microsserviço do Consolidado Diário (Node.js / NestJS)
 │   ├── src/
 │   │   ├── controllers/              # NestJS REST Controllers
 │   │   ├── domain/                   # Aggregators, Balance Calculator
 │   │   ├── application/              # NestJS Services e Event Handlers
-│   │   └── infrastructure/           # ioredis, Amazon SQS consumer, DLQ Handler
+│   │   └── infrastructure/           # ioredis, SQS Consumer, DLQ Handler
 │   ├── tests/
 │   │   ├── unit/
 │   │   └── integration/
 │   └── Dockerfile
 │
-├── architecture-docs/                # Diagramas C4, ADRs e especificações
-│   ├── adr/                          # Architecture Decision Records
-│   ├── c4/                           # Fontes dos diagramas (PlantUML / Mermaid)
-│   └── desafio-arquiteto-solucoes.pdf
-│
-├── infra/                            # Infrastructure as Code
-│   ├── terraform/                    # AWS: ECS, RDS, ElastiCache, SQS, API GW
+├── infra/
+│   ├── terraform/                    # IaC: VPC, ECS, RDS, ElastiCache, SQS, API GW
+│   │   └── modules/
+│   ├── tests/load/                   # Scripts k6 para testes de carga
 │   └── docker-compose.yml            # Stack local completa
+│
+├── docs/
+│   ├── documento_arquitetura_solucao_DAS.md   # Arquitetura completa — Modelo C4
+│   ├── plano_desenvolvimento.md               # Plano de desenvolvimento por sprints
+│   └── desafio-arquiteto-solucoes.pdf         # Especificação original do desafio
 │
 └── README.md
 ```
 
-**Execução local com um único comando:**
+---
 
-```bash
-docker compose up
-```
+## Plano de Desenvolvimento
 
-Inicializa Entry Service, Consolidated Service, PostgreSQL, Redis e Message Broker com configurações de desenvolvimento pré-definidas — pronto para validação funcional e testes integrados.
+O desenvolvimento está organizado em **8 sprints** cobrindo 10 semanas:
+
+| Sprint | Conteúdo | Duração |
+|---|---|---|
+| 0 | Fundação: monorepo, docker-compose, CI skeleton | 1 semana |
+| 1 | Entry Service: Domain + API (`POST /lancamentos`) | 2 semanas |
+| 2 | Entry Service: Transactional Outbox Worker + SQS | 1 semana |
+| 3 | Consolidated Service: Consumer + Redis + API | 2 semanas |
+| 4 | Integração E2E + testes de caos (RNF-001) | 1 semana |
+| 5 | Segurança: OAuth2 + JWT em todos os endpoints | 1 semana |
+| 6 | Observabilidade: OpenTelemetry + Jaeger + Grafana | 1 semana |
+| 7 | IaC Terraform + Pipeline CI/CD (GitHub Actions) | 1 semana |
+| 8 | Testes de carga (50 RPS) + hardening final | 1 semana |
+
+Detalhamento completo, Definition of Done por sprint e matriz de riscos: [docs/plano_desenvolvimento.md](docs/plano_desenvolvimento.md)
+
+---
+
+## Documentação de Arquitetura
+
+A documentação arquitetural completa (C4 Model — Níveis 1 a 3, padrões, segurança, observabilidade e estimativa de custos AWS) está em:
+
+**[docs/documento_arquitetura_solucao_DAS.md](docs/documento_arquitetura_solucao_DAS.md)**
 
 ---
 

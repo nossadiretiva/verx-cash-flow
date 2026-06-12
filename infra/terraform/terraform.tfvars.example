@@ -1,0 +1,34 @@
+# Copie este arquivo para terraform.tfvars e preencha os valores
+# NUNCA commite terraform.tfvars com valores reais
+
+aws_region   = "us-east-1"
+project_name = "verx-cash-flow"
+environment  = "production"
+
+# Rede
+vpc_cidr           = "10.0.0.0/16"
+availability_zones = ["us-east-1a", "us-east-1b"]
+
+# Banco de dados
+db_instance_class = "db.t3.micro"
+db_name           = "cashflow"
+db_username       = "cashflow"
+db_multi_az       = false
+
+# Cache
+redis_node_type = "cache.t3.micro"
+
+# ECS — preencher após o primeiro push para o ECR
+entry_service_image        = "123456789.dkr.ecr.us-east-1.amazonaws.com/verx-cash-flow/entry-service:latest"
+consolidated_service_image = "123456789.dkr.ecr.us-east-1.amazonaws.com/verx-cash-flow/consolidated-service:latest"
+
+entry_service_desired_count        = 2
+consolidated_service_desired_count = 2
+
+# Autenticação — URL do Keycloak em produção ou outro IdP
+jwt_issuer   = "https://auth.example.com/realms/cashflow"
+jwt_audience = "cashflow-api"
+jwt_jwks_uri = "https://auth.example.com/realms/cashflow/protocol/openid-connect/certs"
+
+# Observabilidade (opcional)
+otlp_endpoint = ""

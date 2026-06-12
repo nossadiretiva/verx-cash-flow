@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(dotnet tool install --global dotnet-ef --version 8.0.11)",
+      "Bash(cat /etc/docker/daemon.json 2>/dev/null || echo \"Arquivo não encontrado\")",
+      "Read(//etc/docker/**)",
+      "Bash(docker run *)",
+      "Bash(xargs ls -la)",
+      "Bash(chmod +x /home/nossadiretiva/projetos/verx-cash-flow/infra/localstack/init-localstack.sh)",
+      "Bash(docker-compose ps *)",
+      "Bash(docker compose *)",
+      "Bash(curl -sv http://localhost:8080/health)",
+      "Bash(curl -sv http://localhost:8081/health)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('client_id:', [c['clientId'] for c in d.get\\('clients',[]\\) if not c.get\\('standardFlowEnabled',True\\) or c.get\\('serviceAccountsEnabled'\\)]\\)\")",
+      "Bash(python3 -c ' *)",
+      "Bash(npm install *)",
+      "Bash(curl -sf http://admin:admin@localhost:3000/api/datasources)",
+      "Bash(python3 -c \"import sys,json; ds=json.load\\(sys.stdin\\); [print\\(f'  uid={d.get\\(\\\\\"uid\\\\\",\\\\\"?\\\\\"\\)}, name={d[\\\\\"name\\\\\"]}, type={d[\\\\\"type\\\\\"]}'\\) for d in ds]\")",
+      "Bash(curl -sf http://admin:admin@localhost:3000/api/search?type=dash-db)",
+      "Bash(python3 -c \"import sys,json; ds=json.load\\(sys.stdin\\); [print\\(f'  uid={d[\\\\\"uid\\\\\"]}, title={d[\\\\\"title\\\\\"]}'\\) for d in ds]\")",
+      "Bash(curl -sf \"http://admin:admin@localhost:3000/api/search\" --data-urlencode \"type=dash-db\")",
+      "Bash(python3 -c \"import sys,json; ds=json.load\\(sys.stdin\\); print\\(f'{len\\(ds\\)} dashboards'\\); [print\\(f'  uid={d[\\\\\"uid\\\\\"]}, title={d[\\\\\"title\\\\\"]}'\\) for d in ds]\")",
+      "Bash(curl -s -u admin:admin \"http://localhost:3000/api/search\" -G --data-urlencode \"type=dash-db\")",
+      "Bash(curl -s -u admin:admin \"http://localhost:3000/api/datasources/uid/prometheus/health\")",
+      "Bash(curl -sf http://localhost:8080/health)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('Entry Service:', json.dumps\\(d, indent=2\\)\\)\")",
+      "Bash(curl -sf http://localhost:8081/health)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('Consolidated Service:', json.dumps\\(d, indent=2\\)\\)\")",
+      "Bash(curl -s http://localhost:8080/health)",
+      "Bash(curl -s http://localhost:8081/health)",
+      "Bash(curl -s -X POST http://localhost:8180/realms/cashflow/protocol/openid-connect/token -H 'Content-Type: application/x-www-form-urlencoded' -d 'grant_type=client_credentials&client_id=cashflow-client&client_secret=secret')",
+      "Bash(docker exec *)",
+      "Bash(curl -sv http://localhost:8081/consolidado/2026-06-15)"
+    ]
+  }
+}

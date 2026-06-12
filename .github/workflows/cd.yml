@@ -1,0 +1,146 @@
+name: CD — Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  build-and-push:
+    name: Build & Push ECR
+    runs-on: ubuntu-latest
+    outputs:
+      entry_image: ${{ steps.meta-entry.outputs.tags }}
+      consolidated_image: ${{ steps.meta-consolidated.outputs.tags }}
+      image_tag: ${{ steps.tag.outputs.sha }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Gerar tag da imagem
+        id: tag
+        run: echo "sha=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login no ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Metadados da imagem — Entry Service
+        id: meta-entry
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.login-ecr.outputs.registry }}/verx-cash-flow/entry-service
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+
+      - name: Metadados da imagem — Consolidated Service
+        id: meta-consolidated
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.login-ecr.outputs.registry }}/verx-cash-flow/consolidated-service
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+
+      - name: Build e push — Entry Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./entry-service
+          push: true
+          tags: ${{ steps.meta-entry.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build e push — Consolidated Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./consolidated-service
+          push: true
+          tags: ${{ steps.meta-consolidated.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy ECS
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login no ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Obter task definition atual — Entry Service
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition verx-cash-flow-production-entry-service \
+            --query taskDefinition > /tmp/entry-task-def.json
+
+      - name: Atualizar imagem na task definition — Entry Service
+        id: render-entry
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: /tmp/entry-task-def.json
+          container-name: entry-service
+          image: ${{ steps.login-ecr.outputs.registry }}/verx-cash-flow/entry-service:sha-${{ needs.build-and-push.outputs.image_tag }}
+
+      - name: Deploy — Entry Service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.render-entry.outputs.task-definition }}
+          service: verx-cash-flow-production-entry-service
+          cluster: verx-cash-flow-production
+          wait-for-service-stability: true
+
+      - name: Obter task definition atual — Consolidated Service
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition verx-cash-flow-production-consolidated-service \
+            --query taskDefinition > /tmp/consolidated-task-def.json
+
+      - name: Atualizar imagem na task definition — Consolidated Service
+        id: render-consolidated
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: /tmp/consolidated-task-def.json
+          container-name: consolidated-service
+          image: ${{ steps.login-ecr.outputs.registry }}/verx-cash-flow/consolidated-service:sha-${{ needs.build-and-push.outputs.image_tag }}
+
+      - name: Deploy — Consolidated Service
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+        with:
+          task-definition: ${{ steps.render-consolidated.outputs.task-definition }}
+          service: verx-cash-flow-production-consolidated-service
+          cluster: verx-cash-flow-production
+          wait-for-service-stability: true
+
+      - name: Resumo do deploy
+        run: |
+          echo "## Deploy concluído" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tag:** sha-${{ needs.build-and-push.outputs.image_tag }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Autor:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
