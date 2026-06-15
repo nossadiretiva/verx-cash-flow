@@ -24,12 +24,9 @@
 - [Variáveis de Ambiente](#variáveis-de-ambiente)
 - [Endpoints da API](#endpoints-da-api)
 - [Testes](#testes)
-<<<<<<< HEAD
 - [Deploy na AWS](#deploy-na-aws)
 - [Segurança — OWASP Top 10](#segurança--owasp-top-10)
 - [Performance](#performance)
-=======
->>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
 - [Estrutura do Repositório](#estrutura-do-repositório)
 - [Plano de Desenvolvimento](#plano-de-desenvolvimento)
 - [Documentação de Arquitetura](#documentação-de-arquitetura)
@@ -119,7 +116,7 @@ curl http://localhost:8081/health   # Consolidated Service
 ```bash
 curl -X POST http://localhost:8180/realms/cashflow/protocol/openid-connect/token \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "grant_type=client_credentials&client_id=cashflow-client&client_secret=secret"
+  -d "grant_type=client_credentials&client_id=cashflow-client&client_secret=cashflow-secret"
 ```
 
 ### 4. Registrar um lançamento
@@ -178,7 +175,6 @@ Resposta esperada:
 | `SQS__EndpointUrl` | `http://localstack:4566` | Endpoint customizado (LocalStack/AWS) |
 | `Outbox__PollingIntervalSeconds` | `5` | Intervalo do worker de Outbox |
 | `Auth__JwksUri` | `http://keycloak:8080/...` | URI das chaves públicas JWT |
-<<<<<<< HEAD
 
 ### Consolidated Service
 
@@ -487,110 +483,10 @@ Aguarda estabilidade do serviço (wait-for-service-stability: true)
 | A10 | Server-Side Request Forgery (SSRF) | ✅ | Nenhuma URL fornecida pelo usuário é acessada pela aplicação; endpoints externos (SQS, Keycloak) fixados em variáveis de ambiente — sem redirecionamento baseado em input |
 
 > **Hardening adicional recomendado para produção:** habilitar WAF no API Gateway, configurar rate limiting por IP/client, ativar AWS GuardDuty e AWS Config Rules para auditoria contínua.
-=======
-
-### Consolidated Service
-
-| Variável | Padrão (dev) | Descrição |
-|---|---|---|
-| `NODE_ENV` | `development` | Ambiente de execução |
-| `REDIS_URL` | `redis://redis:6379` | Connection string Redis |
-| `SQS_QUEUE_URL` | `http://localstack:4566/...` | URL da fila SQS |
-| `SQS_ENDPOINT_URL` | `http://localstack:4566` | Endpoint customizado (LocalStack/AWS) |
-| `SQS_MAX_MESSAGES` | `10` | Máximo de mensagens por polling |
-| `SQS_VISIBILITY_TIMEOUT` | `30` | Timeout de visibilidade (segundos) |
-| `JWT_JWKS_URI` | `http://keycloak:8080/...` | URI das chaves públicas JWT |
-| `REDIS_SALDO_TTL_DAYS` | `7` | TTL das chaves de saldo no Redis |
-
----
-
-## Endpoints da API
-
-### Entry Service — `POST /lancamentos`
-
-```
-POST /lancamentos
-Authorization: Bearer {token}  (scope:write obrigatório)
-
-Body:
-{
-  "tipo":      "CREDITO" | "DEBITO"   // obrigatório
-  "valor":     number (> 0)           // obrigatório
-  "data":      "YYYY-MM-DD"           // obrigatório
-  "descricao": string                 // opcional
-}
-
-201 Created  →  { "id": "uuid", "timestamp": "ISO-8601" }
-400 Bad Request  →  { "errors": [...] }
-401 Unauthorized
-403 Forbidden (scope inválido)
-```
-
-### Consolidated Service — `GET /consolidado/:data`
-
-```
-GET /consolidado/2024-01-15
-Authorization: Bearer {token}  (scope:read obrigatório)
-
-200 OK  →  {
-  "data":             "2024-01-15",
-  "saldo_final":      1500.00,
-  "total_creditos":   2000.00,
-  "total_debitos":    500.00,
-  "updated_at":       "ISO-8601"
-}
-
-404 Not Found  →  { "message": "Consolidado não disponível para a data informada" }
-401 Unauthorized
-```
-
-### Health Check (ambos os serviços)
-
-```
-GET /health
-
-200 OK  →  {
-  "status": "ok",
-  "dependencies": {
-    "database": "ok",   // Entry Service
-    "redis":    "ok",   // Consolidated Service
-    "sqs":      "ok"
-  }
-}
-```
-
----
-
-## Testes
-
-### Entry Service
-
-```bash
-cd entry-service
-
-# Testes unitários
-dotnet test tests/Unit/
-
-# Testes de integração (requer docker-compose up)
-dotnet test tests/Integration/
-
-# Todos com cobertura
-dotnet test --collect:"XPlat Code Coverage"
-```
-
-### Consolidated Service
-
-```bash
-cd consolidated-service
-
-# Testes unitários
-pnpm test
->>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
 
 # Testes de integração (requer docker-compose up)
 pnpm test:integration
 
-<<<<<<< HEAD
 ## Performance
 
 ### Requisitos não-funcionais
@@ -652,27 +548,6 @@ k6 run infra/tests/load/consolidado-50rps.js \
   -e BASE_URL=https://api.staging.example.com \
   -e TOKEN_URL=https://keycloak.staging.example.com/realms/cashflow/protocol/openid-connect/token \
   -e CLIENT_SECRET=<secret>
-=======
-# Cobertura
-pnpm test:cov
-```
-
-### Testes End-to-End
-
-```bash
-# A partir da raiz do projeto (requer stack completa rodando)
-pnpm e2e
-```
-
-### Testes de Carga
-
-```bash
-# 50 RPS no serviço de consolidado (requer k6 instalado)
-k6 run infra/tests/load/consolidado-50rps.js
-
-# 20 RPS no Entry Service
-k6 run infra/tests/load/entry-20rps.js
->>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
 ```
 
 ---

@@ -13,10 +13,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="8.0.11" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="Testcontainers.PostgreSql" Version="3.10.0" />
-<<<<<<< HEAD
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.3.3" />
-=======
->>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
