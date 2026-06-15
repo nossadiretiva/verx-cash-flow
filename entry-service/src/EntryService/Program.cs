@@ -1,9 +1,13 @@
+<<<<<<< HEAD
 using System.Diagnostics.Metrics;
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
 using Amazon.SQS;
 using EntryService.Application.Commands;
 using EntryService.Application.Validators;
 using EntryService.Infrastructure.Data;
 using EntryService.Infrastructure.Messaging;
+<<<<<<< HEAD
 using EntryService.Infrastructure.Metrics;
 using EntryService.Infrastructure.Outbox;
 using FluentValidation;
@@ -15,6 +19,15 @@ using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using Serilog;
 using Serilog.Enrichers.Span;
+=======
+using EntryService.Infrastructure.Outbox;
+using FluentValidation;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using Serilog;
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
@@ -25,7 +38,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseSerilog((ctx, cfg) => cfg
     .ReadFrom.Configuration(ctx.Configuration)
     .Enrich.FromLogContext()
+<<<<<<< HEAD
     .Enrich.WithSpan()
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
     .WriteTo.Console(new Serilog.Formatting.Json.JsonFormatter()));
 
 // ── MediatR ───────────────────────────────────────────────────────────────────
@@ -53,6 +69,7 @@ builder.Services.AddScoped<ISqsPublisher, SqsPublisher>();
 // ── Outbox Worker ─────────────────────────────────────────────────────────────
 builder.Services.AddHostedService<OutboxWorker>();
 
+<<<<<<< HEAD
 // ── Métricas customizadas ─────────────────────────────────────────────────────
 builder.Services.AddSingleton<LancamentosMetrics>();
 
@@ -105,6 +122,19 @@ builder.Services.AddAuthorization(options =>
                 .Split(' ', StringSplitOptions.RemoveEmptyEntries)
                 .Contains("cashflow:write")));
 });
+=======
+// ── OpenTelemetry ─────────────────────────────────────────────────────────────
+var otlpEndpoint = builder.Configuration["Otlp:Endpoint"];
+if (!string.IsNullOrEmpty(otlpEndpoint))
+{
+    builder.Services.AddOpenTelemetry()
+        .ConfigureResource(r => r.AddService("entry-service"))
+        .WithTracing(t => t
+            .AddAspNetCoreInstrumentation()
+            .AddEntityFrameworkCoreInstrumentation()
+            .AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint)));
+}
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
 
 // ── Health checks ─────────────────────────────────────────────────────────────
 builder.Services.AddHealthChecks()
@@ -122,15 +152,21 @@ if (app.Environment.IsDevelopment())
     await db.Database.MigrateAsync();
 }
 
+<<<<<<< HEAD
 app.UseAuthentication();
 app.UseAuthorization();
 
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
 // ── Endpoints ─────────────────────────────────────────────────────────────────
 app.MapPost("/lancamentos", async (
     CreateLancamentoRequest req,
     IValidator<CreateLancamentoCommand> validator,
     IMediator mediator,
+<<<<<<< HEAD
     LancamentosMetrics metrics,
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
     CancellationToken ct) =>
 {
     var command = new CreateLancamentoCommand(req.Tipo, req.Valor, req.Data, req.Descricao);
@@ -140,6 +176,7 @@ app.MapPost("/lancamentos", async (
         return Results.ValidationProblem(validation.ToDictionary());
 
     var result = await mediator.Send(command, ct);
+<<<<<<< HEAD
 
     metrics.LancamentoCriado(req.Tipo);
 
@@ -148,6 +185,12 @@ app.MapPost("/lancamentos", async (
 
 app.MapHealthChecks("/health");
 app.MapPrometheusScrapingEndpoint("/metrics");
+=======
+    return Results.Created($"/lancamentos/{result.Id}", new { result.Id, result.Timestamp });
+});
+
+app.MapHealthChecks("/health");
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
 
 app.Run();
 

@@ -1,10 +1,13 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import {
+<<<<<<< HEAD
   lancamentosProcessadosTotal,
   lancamentosDuplicadosTotal,
   lancamentosFalhasTotal,
 } from '../../metrics';
 import {
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
   SQSClient,
   ReceiveMessageCommand,
   DeleteMessageCommand,
@@ -84,13 +87,18 @@ export class SqsConsumerService implements OnModuleInit, OnModuleDestroy {
 
       const isDuplicate = await this.redis.markEventProcessed(event.event_id);
       if (isDuplicate) {
+<<<<<<< HEAD
         this.logger.warn({ event_id: event.event_id }, 'Evento duplicado ignorado');
         lancamentosDuplicadosTotal.inc();
+=======
+        this.logger.warn(`Evento duplicado ignorado: ${event.event_id}`);
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
         await this.deleteMessage(receiptHandle);
         return;
       }
 
       await this.aggregator.aggregate(event);
+<<<<<<< HEAD
       lancamentosProcessadosTotal.inc({ tipo: event.data.tipo });
       this.logger.log(`Evento processado: event_id=${event.event_id} tipo=${event.data.tipo}`);
       await this.deleteMessage(receiptHandle);
@@ -98,10 +106,22 @@ export class SqsConsumerService implements OnModuleInit, OnModuleDestroy {
       lancamentosFalhasTotal.inc();
       this.logger.error({ receiveCount, err }, 'Falha ao processar mensagem SQS');
 
+=======
+      await this.deleteMessage(receiptHandle);
+    } catch (err) {
+      this.logger.error(`Falha ao processar mensagem. ReceiveCount=${receiveCount}`, err);
+
+      // Envia para DLQ após 3 falhas (SQS faz isso automaticamente via redrive,
+      // mas tratamos explicitamente erros de parse/validação)
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
       if (receiveCount >= 3) {
         await this.sendToDlq(message.Body ?? '');
         await this.deleteMessage(receiptHandle);
       }
+<<<<<<< HEAD
+=======
+      // Se < 3, deixa no queue para retry automático do SQS (visibility timeout)
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
     }
   }
 

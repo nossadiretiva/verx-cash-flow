@@ -100,4 +100,7 @@ npm-debug.log
 
 # ─── k6 results ──────────────────────────────────────────────────────────────
 infra/tests/load/results/
+<<<<<<< HEAD
 .claude/settings.local.json
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2

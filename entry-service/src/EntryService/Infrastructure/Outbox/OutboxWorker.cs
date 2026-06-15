@@ -1,7 +1,13 @@
+<<<<<<< HEAD
 using System.Diagnostics;
 using EntryService.Infrastructure.Data;
 using EntryService.Infrastructure.Messaging;
 using EntryService.Infrastructure.Metrics;
+=======
+using System.Text.Json;
+using EntryService.Infrastructure.Data;
+using EntryService.Infrastructure.Messaging;
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
 using Microsoft.EntityFrameworkCore;
 using Polly;
 using Polly.Retry;
@@ -12,10 +18,13 @@ public sealed class OutboxWorker(
     IServiceScopeFactory scopeFactory,
     ILogger<OutboxWorker> logger) : BackgroundService
 {
+<<<<<<< HEAD
     public const string ActivitySourceName = "EntryService.OutboxWorker";
 
     private static readonly ActivitySource _activitySource = new(ActivitySourceName);
 
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
     private readonly AsyncRetryPolicy _retryPolicy = Policy
         .Handle<Exception>()
         .WaitAndRetryAsync(
@@ -48,7 +57,10 @@ public sealed class OutboxWorker(
         using var scope = scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         var publisher = scope.ServiceProvider.GetRequiredService<ISqsPublisher>();
+<<<<<<< HEAD
         var metrics = scope.ServiceProvider.GetRequiredService<LancamentosMetrics>();
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
 
         var pending = await db.OutboxEvents
             .Where(e => e.Status == "PENDING")
@@ -58,13 +70,17 @@ public sealed class OutboxWorker(
 
         if (pending.Count == 0) return;
 
+<<<<<<< HEAD
         using var batchActivity = _activitySource.StartActivity("outbox.process_batch");
         batchActivity?.SetTag("outbox.batch_size", pending.Count);
 
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
         logger.LogInformation("OutboxWorker processando {Count} evento(s) pendente(s).", pending.Count);
 
         foreach (var evt in pending)
         {
+<<<<<<< HEAD
             using var eventActivity = _activitySource.StartActivity("outbox.publish_event");
             eventActivity?.SetTag("outbox.event_id", evt.Id.ToString());
             eventActivity?.SetTag("outbox.event_type", evt.EventType);
@@ -91,6 +107,16 @@ public sealed class OutboxWorker(
                 eventActivity?.SetStatus(ActivityStatusCode.Error, ex.Message);
                 logger.LogError(ex, "Falha definitiva ao publicar evento {EventId}.", evt.Id);
             }
+=======
+            await _retryPolicy.ExecuteAsync(async () =>
+            {
+                await publisher.PublishAsync(evt.Payload, ct);
+                evt.Status = "PUBLISHED";
+                evt.PublishedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync(ct);
+                logger.LogInformation("Evento {EventId} publicado com sucesso.", evt.Id);
+            });
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
         }
     }
 }

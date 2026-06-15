@@ -1,6 +1,7 @@
 {
   "permissions": {
     "allow": [
+<<<<<<< HEAD
       "PowerShell(dotnet tool install --global dotnet-ef --version 8.0.11)",
       "Bash(cat /etc/docker/daemon.json 2>/dev/null || echo \"Arquivo não encontrado\")",
       "Read(//etc/docker/**)",
@@ -31,6 +32,9 @@
       "Bash(curl -s -X POST http://localhost:8180/realms/cashflow/protocol/openid-connect/token -H 'Content-Type: application/x-www-form-urlencoded' -d 'grant_type=client_credentials&client_id=cashflow-client&client_secret=secret')",
       "Bash(docker exec *)",
       "Bash(curl -sv http://localhost:8081/consolidado/2026-06-15)"
+=======
+      "PowerShell(dotnet tool install --global dotnet-ef --version 8.0.11)"
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
     ]
   }
 }

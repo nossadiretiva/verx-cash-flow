@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Headers;
@@ -11,6 +12,15 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+=======
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using FluentAssertions;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
 using Testcontainers.PostgreSql;
 using EntryService.Infrastructure.Data;
 
@@ -18,11 +28,14 @@ namespace EntryService.Integration.Tests;
 
 public sealed class LancamentosEndpointTests : IAsyncLifetime
 {
+<<<<<<< HEAD
     // Chave simétrica usada exclusivamente nos testes para assinar tokens fake
     private const string TestSigningKey = "test-signing-key-for-integration-tests-only!";
     private const string TestIssuer = "test-issuer";
     private const string TestAudience = "cashflow-api";
 
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
         .WithImage("postgres:16-alpine")
         .WithDatabase("cashflow_test")
@@ -50,6 +63,7 @@ public sealed class LancamentosEndpointTests : IAsyncLifetime
 
                     services.AddDbContext<AppDbContext>(opt =>
                         opt.UseNpgsql(_postgres.GetConnectionString()));
+<<<<<<< HEAD
 
                     // Substitui validação JWT por chave simétrica de teste (sem Keycloak)
                     services.PostConfigure<JwtBearerOptions>(
@@ -68,11 +82,17 @@ public sealed class LancamentosEndpointTests : IAsyncLifetime
                                 ValidateLifetime = false,
                             };
                         });
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
                 });
             });
 
         _client = _factory.CreateClient();
 
+<<<<<<< HEAD
+=======
+        // Aplica migrations
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await db.Database.MigrateAsync();
@@ -84,6 +104,7 @@ public sealed class LancamentosEndpointTests : IAsyncLifetime
         _factory.Dispose();
     }
 
+<<<<<<< HEAD
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private static string GenerateToken(string scope = "cashflow:write")
@@ -117,6 +138,11 @@ public sealed class LancamentosEndpointTests : IAsyncLifetime
     public async Task PostLancamentos_DadosValidos_Retorna201()
     {
         SetAuthHeader();
+=======
+    [Fact]
+    public async Task PostLancamentos_DadosValidos_Retorna201()
+    {
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
         var payload = new
         {
             tipo = "CREDITO",
@@ -128,6 +154,10 @@ public sealed class LancamentosEndpointTests : IAsyncLifetime
         var response = await _client.PostAsJsonAsync("/lancamentos", payload);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
+<<<<<<< HEAD
+=======
+
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         body.GetProperty("id").GetString().Should().NotBeNullOrEmpty();
         body.GetProperty("timestamp").GetString().Should().NotBeNullOrEmpty();
@@ -136,7 +166,10 @@ public sealed class LancamentosEndpointTests : IAsyncLifetime
     [Fact]
     public async Task PostLancamentos_ValorZero_Retorna400()
     {
+<<<<<<< HEAD
         SetAuthHeader();
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
         var payload = new { tipo = "CREDITO", valor = 0m, data = "2024-01-15" };
 
         var response = await _client.PostAsJsonAsync("/lancamentos", payload);
@@ -147,7 +180,10 @@ public sealed class LancamentosEndpointTests : IAsyncLifetime
     [Fact]
     public async Task PostLancamentos_TipoInvalido_Retorna400()
     {
+<<<<<<< HEAD
         SetAuthHeader();
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
         var payload = new { tipo = "TRANSFERENCIA", valor = 100m, data = "2024-01-15" };
 
         var response = await _client.PostAsJsonAsync("/lancamentos", payload);
@@ -158,7 +194,10 @@ public sealed class LancamentosEndpointTests : IAsyncLifetime
     [Fact]
     public async Task PostLancamentos_Persiste_LancamentoEOutboxEvent()
     {
+<<<<<<< HEAD
         SetAuthHeader();
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
         var payload = new { tipo = "DEBITO", valor = 75.50m, data = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd") };
 
         await _client.PostAsJsonAsync("/lancamentos", payload);
@@ -176,6 +215,7 @@ public sealed class LancamentosEndpointTests : IAsyncLifetime
         outboxEvents[0].Status.Should().Be("PENDING");
         outboxEvents[0].EventType.Should().Be("LancamentoCriado");
     }
+<<<<<<< HEAD
 
     // ── Testes de autenticação (Sprint 5) ─────────────────────────────────────
 
@@ -228,4 +268,6 @@ public sealed class LancamentosEndpointTests : IAsyncLifetime
 
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
 }

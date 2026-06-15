@@ -59,7 +59,11 @@ services:
     volumes:
       - ./infra/keycloak:/opt/keycloak/data/import
     healthcheck:
+<<<<<<< HEAD
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && printf 'GET /realms/master HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q '200 OK' <&3"]
+=======
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/health/ready || exit 1"]
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
       interval: 10s
       timeout: 10s
       retries: 15
@@ -114,7 +118,10 @@ services:
       Auth__JwksUri: "http://keycloak:8080/realms/cashflow/protocol/openid-connect/certs"
       Auth__Audience: "cashflow-api"
       Auth__Issuer: "http://keycloak:8080/realms/cashflow"
+<<<<<<< HEAD
       Auth__ExternalIssuer: "http://localhost:8180/realms/cashflow"
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
       Otlp__Endpoint: "http://jaeger:4317"
     depends_on:
       postgres:
@@ -146,9 +153,14 @@ services:
       AWS_SECRET_ACCESS_KEY: "test"
       JWT_JWKS_URI: "http://keycloak:8080/realms/cashflow/protocol/openid-connect/certs"
       JWT_AUDIENCE: "cashflow-api"
+<<<<<<< HEAD
       JWT_ISSUER: "http://localhost:8180/realms/cashflow"
       OTLP_ENDPOINT: "http://jaeger:4317"
       OTEL_SERVICE_NAME: "consolidated-service"
+=======
+      JWT_ISSUER: "http://keycloak:8080/realms/cashflow"
+      OTLP_ENDPOINT: "http://jaeger:4317"
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
       REDIS_SALDO_TTL_DAYS: "7"
     depends_on:
       redis:

@@ -20,37 +20,56 @@
             "access.token.claim": "true"
           }
         }
+<<<<<<< HEAD
       ],
       "defaultClientScopes": [
         "cashflow:write",
         "cashflow:read"
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
       ]
     }
   ],
   "roles": {
     "realm": [
+<<<<<<< HEAD
       {
         "name": "cashflow-write"
       },
       {
         "name": "cashflow-read"
       }
+=======
+      { "name": "cashflow-write" },
+      { "name": "cashflow-read" }
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
     ]
   },
   "clientScopes": [
     {
       "name": "cashflow:write",
       "protocol": "openid-connect",
+<<<<<<< HEAD
       "attributes": {
         "include.in.token.scope": "true"
       }
+=======
+      "attributes": { "include.in.token.scope": "true" }
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
     },
     {
       "name": "cashflow:read",
       "protocol": "openid-connect",
+<<<<<<< HEAD
       "attributes": {
         "include.in.token.scope": "true"
       }
     }
   ]
 }
+=======
+      "attributes": { "include.in.token.scope": "true" }
+    }
+  ]
+}
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2

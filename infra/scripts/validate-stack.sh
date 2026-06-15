@@ -24,7 +24,11 @@ wait_for "$BASE_CONSOL/health"  "Consolidated Service"
 
 # Obter token
 TOKEN=$(curl -sf -X POST "$TOKEN_URL" \
+<<<<<<< HEAD
   -d "grant_type=client_credentials&client_id=cashflow-client&client_secret=cashflow-secret&scope=cashflow:write cashflow:read" \
+=======
+  -d "grant_type=client_credentials&client_id=cashflow-client&client_secret=cashflow-secret" \
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
   | grep -o '"access_token":"[^"]*' | cut -d'"' -f4)
 
 if [ -z "$TOKEN" ]; then

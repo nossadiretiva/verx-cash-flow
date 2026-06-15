@@ -2,12 +2,18 @@ apiVersion: 1
 
 datasources:
   - name: Prometheus
+<<<<<<< HEAD
     uid: prometheus
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
     type: prometheus
     access: proxy
     url: http://prometheus:9090
     isDefault: true
     editable: false
+<<<<<<< HEAD
     jsonData:
       httpMethod: POST
       timeInterval: "15s"
+=======
+>>>>>>> 76cf6c5d4e4f8af03b387c6fe57874ffec4b56d2
