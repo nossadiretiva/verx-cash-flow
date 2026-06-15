@@ -45,8 +45,13 @@ builder.Services.AddSingleton<IAmazonSQS>(_ =>
     var endpointUrl = builder.Configuration["Sqs:EndpointUrl"];
     var sqsConfig = new AmazonSQSConfig { RegionEndpoint = Amazon.RegionEndpoint.USEast1 };
     if (!string.IsNullOrEmpty(endpointUrl))
+    {
+        // LocalStack: usa endpoint customizado e credenciais fictícias
         sqsConfig.ServiceURL = endpointUrl;
-    return new AmazonSQSClient("test", "test", sqsConfig);
+        return new AmazonSQSClient("test", "test", sqsConfig);
+    }
+    // Produção: usa IAM task role via cadeia de credenciais padrão do SDK
+    return new AmazonSQSClient(sqsConfig);
 });
 builder.Services.AddScoped<ISqsPublisher, SqsPublisher>();
 

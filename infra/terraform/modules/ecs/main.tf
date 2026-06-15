@@ -323,6 +323,7 @@ resource "aws_ecs_task_definition" "consolidated_service" {
       { name = "JWT_AUDIENCE",          value = var.jwt_audience },
       { name = "JWT_ISSUER",            value = var.jwt_issuer },
       { name = "OTLP_ENDPOINT",         value = var.otlp_endpoint },
+      { name = "OTEL_SERVICE_NAME",     value = "consolidated-service" },
       { name = "REDIS_SALDO_TTL_DAYS",  value = "7" }
     ]
 

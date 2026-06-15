@@ -26,13 +26,19 @@ export class SqsConsumerService implements OnModuleInit, OnModuleDestroy {
     private readonly aggregator: BalanceAggregatorService,
     private readonly redis: RedisService,
   ) {
+    // LocalStack: usa endpoint customizado e credenciais fictícias.
+    // Produção: omite credentials para usar IAM task role via SDK default chain.
     this.sqsClient = new SQSClient({
       region: process.env.AWS_REGION ?? 'us-east-1',
-      endpoint: process.env.SQS_ENDPOINT_URL,
-      credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? 'test',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? 'test',
-      },
+      ...(process.env.SQS_ENDPOINT_URL
+        ? {
+            endpoint: process.env.SQS_ENDPOINT_URL,
+            credentials: {
+              accessKeyId: process.env.AWS_ACCESS_KEY_ID ?? 'test',
+              secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY ?? 'test',
+            },
+          }
+        : {}),
     });
     this.queueUrl = process.env.SQS_QUEUE_URL ?? '';
     this.dlqUrl = process.env.SQS_DLQ_URL ?? '';
